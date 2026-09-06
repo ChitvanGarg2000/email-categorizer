@@ -11,10 +11,15 @@ migrate_schema()
 
 app = FastAPI(title="Email Categorizer MVP")
 
-# NOTE: SessionMiddleware here uses a simple signed cookie for the MVP.
-# It's fine for a single-instance demo; a production/multi-instance deploy
-# should move session state to a shared store (e.g. Redis) instead.
-app.add_middleware(SessionMiddleware, secret_key=settings.secret_key, same_site="lax")
+# Cross-origin deploy (e.g. Vercel frontend + Railway backend) requires
+# SameSite=None + Secure so the session cookie is sent on API fetch calls.
+_is_https = settings.frontend_url.startswith("https://")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.secret_key,
+    same_site="none" if _is_https else "lax",
+    https_only=_is_https,
+)
 
 app.add_middleware(
     CORSMiddleware,

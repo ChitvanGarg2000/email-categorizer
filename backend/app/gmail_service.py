@@ -92,10 +92,18 @@ def _get_header(headers: list[dict], name: str) -> str:
     return ""
 
 
+def _unread_inbox_query() -> str:
+    """Gmail search query: unread inbox messages within the configured window."""
+    query = "is:unread in:inbox"
+    if settings.gmail_sync_days > 0:
+        query = f"{query} newer_than:{settings.gmail_sync_days}d"
+    return query
+
+
 def fetch_unread_messages(token: OAuthToken, max_results: int = 20) -> list[dict]:
     """
     Returns a list of dicts: {id, thread_id, internal_date, subject, sender, snippet}
-    for up to `max_results` unread messages in the inbox.
+    for up to `max_results` unread inbox messages within gmail_sync_days.
     """
     creds = credentials_from_token(token)
     service = build("gmail", "v1", credentials=creds)
@@ -104,7 +112,11 @@ def fetch_unread_messages(token: OAuthToken, max_results: int = 20) -> list[dict
         resp = (
             service.users()
             .messages()
-            .list(userId="me", q="is:unread in:inbox", maxResults=max_results)
+            .list(
+                userId="me",
+                q=_unread_inbox_query(),
+                maxResults=max_results,
+            )
             .execute()
         )
     except HttpError as exc:

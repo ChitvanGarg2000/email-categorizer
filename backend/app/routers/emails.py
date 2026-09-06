@@ -28,9 +28,10 @@ def sync_emails(
     db: Session = Depends(get_db),
 ):
     """
-    Pulls the latest unread messages from Gmail, classifies any we haven't
-    seen before (checked by gmail_message_id so re-syncing doesn't burn
-    LLM calls re-classifying the same email), and returns the full set.
+    Pulls unread inbox messages from the last gmail_sync_days from Gmail,
+    classifies any we haven't seen before (checked by gmail_message_id so
+    re-syncing doesn't burn LLM calls re-classifying the same email), and
+    returns the full set.
     """
     token = db.query(OAuthToken).filter(OAuthToken.user_id == user.id).first()
     if not token:

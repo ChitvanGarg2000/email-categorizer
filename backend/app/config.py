@@ -9,9 +9,15 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2:3b"
 
-    llm_provider: str = "ollama"  # "ollama" or "gemini"
+    llm_provider: str = "openrouter"  # "ollama", "gemini", or "openrouter"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
+
+    openrouter_api_key: str = ""
+    openrouter_model: str = "minimax/minimax-m3:free"
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+
+    gmail_sync_days: int = 14
 
     secret_key: str = "dev-secret-change-me"
     frontend_url: str = "http://localhost:3000"
