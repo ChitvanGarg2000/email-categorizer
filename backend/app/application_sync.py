@@ -4,9 +4,10 @@ Sync Application rows from newly classified Job/Interview emails (thread-based).
 from collections import defaultdict
 from datetime import datetime
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .application_extractor import APPLICATION_STAGES, extract_application_details_batch
+from .application_extractor import extract_application_details_batch
 from .models import Application
 
 
@@ -29,6 +30,46 @@ def _apply_details_to_application(
     app.last_email_subject = email["subject"]
     app.last_email_snippet = email["snippet"]
     app.last_updated = datetime.utcnow()
+
+
+def _get_or_create_application(
+    db: Session,
+    user_id: int,
+    thread_id: str,
+    cache: dict[str, Application],
+) -> Application:
+    app = cache.get(thread_id)
+    if app is not None:
+        return app
+
+    app = (
+        db.query(Application)
+        .filter(Application.user_id == user_id, Application.gmail_thread_id == thread_id)
+        .first()
+    )
+    if app is not None:
+        cache[thread_id] = app
+        return app
+
+    app = Application(
+        user_id=user_id,
+        gmail_thread_id=thread_id,
+        stage="Unknown",
+    )
+    try:
+        with db.begin_nested():
+            db.add(app)
+            db.flush()
+    except IntegrityError:
+        db.expunge(app)
+        app = (
+            db.query(Application)
+            .filter(Application.user_id == user_id, Application.gmail_thread_id == thread_id)
+            .one()
+        )
+
+    cache[thread_id] = app
+    return app
 
 
 def sync_applications_from_job_emails(
@@ -55,7 +96,7 @@ def sync_applications_from_job_emails(
         return
 
     thread_ids = list(by_thread.keys())
-    existing_apps = {
+    app_cache: dict[str, Application] = {
         app.gmail_thread_id: app
         for app in db.query(Application)
         .filter(Application.user_id == user_id, Application.gmail_thread_id.in_(thread_ids))
@@ -71,16 +112,7 @@ def sync_applications_from_job_emails(
 
     for thread_id, emails in by_thread.items():
         emails.sort(key=lambda e: e.get("internal_date", 0))
-        app = existing_apps.get(thread_id)
-
-        if app is None:
-            app = Application(
-                user_id=user_id,
-                gmail_thread_id=thread_id,
-                stage="Unknown",
-            )
-            db.add(app)
-            existing_apps[thread_id] = app
+        app = _get_or_create_application(db, user_id, thread_id, app_cache)
 
         for email in emails:
             details = extractions.get(email["id"], {"company": None, "role": None, "stage": "Unknown"})
